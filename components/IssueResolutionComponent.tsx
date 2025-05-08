@@ -1,18 +1,31 @@
 "use client";
+
 import Image from "next/image";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface IssueResolutionProps {
   issueType: string;
   issueDetails: any;
+  onMethodChange: (column: string, method: string) => void;
+  selectedColumnMethods: Record<string, string>;
 }
 
 export function IssueResolutionComponent({
   issueType,
   issueDetails,
+  onMethodChange,
+  selectedColumnMethods,
 }: IssueResolutionProps) {
   // Function to generate visualization placeholders based on issue type
   const getVisualization = (type: string) => {
@@ -28,17 +41,18 @@ export function IssueResolutionComponent({
   // Function to format the issue details into tabular data
   const formatIssueDetails = () => {
     if (typeof issueDetails === "number") {
-      return [{ column: "Total Count", count: issueDetails }];
+      return [{ column: "Total Count", value: issueDetails }];
     }
-
     return Object.entries(issueDetails).map(([column, value]) => {
-      let count = 0;
+      let formattedValue: string | number = 0;
+
       if (typeof value === "number") {
-        count = value;
+        formattedValue = value;
+      } else if (typeof value === "string") {
+        formattedValue = value;
       } else if (typeof value === "object" && value !== null) {
-        // For nested objects, we take the first numeric value or length
         const values = Object.values(value);
-        count =
+        formattedValue =
           values.length > 0
             ? typeof values[0] === "number"
               ? values[0]
@@ -46,7 +60,7 @@ export function IssueResolutionComponent({
             : 0;
       }
 
-      return { column, count };
+      return { column, value: formattedValue };
     });
   };
 
@@ -56,18 +70,54 @@ export function IssueResolutionComponent({
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
+  const showColumnSelection = [
+    "missing",
+    "outliers",
+    "categorical_conversion_needed",
+    "dtypes",
+  ].includes(issueType.toLowerCase());
+
+  const getResolutionMethodsForType = (issueType: string) => {
+    switch (issueType.toLowerCase()) {
+      case "missing":
+        return [
+          "Mean",
+          "Median",
+          "Mode",
+          "Backward Fill",
+          "KNN Imputation",
+          "Multivariate Imputation",
+        ];
+      case "categorical_conversion_needed":
+        return [
+          "One-Hot Encoding",
+          "Ordinal Encoding",
+          "Binary Encoding",
+          "Frequency Encoding",
+          "Hash Encoding",
+        ];
+      case "dtypes":
+        return [
+          "Explicit Type Casting",
+          "Implicit Type Coercion",
+          "Pattern-based Format Enforcement",
+        ];
+      case "outliers":
+        return ["Z-Score-Based Filtering", "Winsorization"];
+      default:
+        return [];
+    }
+  };
+
+  const columnSpecificMethods = getResolutionMethodsForType(issueType);
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="bg-muted/30 rounded-lg p-4 border border-border/50 flex items-start gap-3">
-        <AlertTriangle className="h-5 w-5 text-warning-600 mt-0.5 flex-shrink-0" />
-        <div>
-          <h3 className="font-medium text-foreground mb-1">
-            About {formattedIssueType} Issues
-          </h3>
-          <p className="text-muted-foreground text-sm">
-            {getIssueDescription(issueType)}
-          </p>
-        </div>
+    <div>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-[#0B1A2F] mb-2">
+          About {formattedIssueType} Issues
+        </h2>
+        <p className="text-gray-600">{getIssueDescription(issueType)}</p>
       </div>
 
       <Tabs defaultValue="visualization" className="w-full">
@@ -114,27 +164,62 @@ export function IssueResolutionComponent({
                       <th className="px-4 py-2 rounded-tl-lg border-b border-gray-200">
                         Column Name
                       </th>
-                      <th className="px-4 py-2 rounded-tr-lg border-b border-gray-200">
-                        Affected Rows
+                      <th className="px-4 py-2 border-b border-gray-200">
+                        Affected Rows / Issues
                       </th>
+                      {showColumnSelection && (
+                        <th className="px-4 py-2 rounded-tr-lg border-b border-gray-200">
+                          Resolution Method
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
-                    {tableData.map((row, index) => (
-                      <tr
-                        key={index}
-                        className="even:bg-gray-50 hover:bg-gray-100 transition"
-                      >
-                        <td className="px-4 py-2 font-medium text-gray-800 border-b border-gray-200">
-                          {row.column}
-                        </td>
-                        <td className="px-4 py-2 border-b border-gray-200">
-                          <Badge variant="outline" className="text-sm">
-                            {row.count}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
+                    {tableData
+                      .filter(
+                        (row) =>
+                          !(typeof row.value === "number" && row.value === 0)
+                      )
+                      .map((row, index) => (
+                        <tr
+                          key={index}
+                          className="even:bg-gray-50 hover:bg-gray-100 transition"
+                        >
+                          <td className="px-4 py-2 font-medium text-gray-800 border-b border-gray-200">
+                            {row.column}
+                          </td>
+                          <td className="px-4 py-2 border-b border-gray-200">
+                            <Badge variant="outline" className="text-sm">
+                              {row.value}
+                            </Badge>
+                          </td>
+                          {showColumnSelection ? (
+                            <td className="px-4 py-2 border-b border-gray-200">
+                              <Select
+                                onValueChange={(value) =>
+                                  onMethodChange(row.column, value)
+                                }
+                                value={selectedColumnMethods[row.column] || ""}
+                              >
+                                <SelectTrigger className="w-full md:w-60 bg-white">
+                                  <SelectValue placeholder="Choose method" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {columnSpecificMethods.map((method) => (
+                                    <SelectItem key={method} value={method}>
+                                      {method}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                          ) : (
+                            <td className="px-4 py-2 border-b border-gray-200 text-sm text-gray-500">
+                              Default methods applied
+                            </td>
+                          )}
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -151,29 +236,21 @@ function getIssueDescription(issueType: string): string {
   const descriptions: Record<string, string> = {
     missing:
       "Missing values can significantly impact your analysis. These are cells in your dataset where no value was recorded, which can lead to biased results or errors in your analysis.",
-
     outliers:
       "Outliers are data points that differ significantly from other observations. They can distort statistical analyses and lead to incorrect conclusions.",
-
     duplicates:
       "Duplicate entries can skew your analysis by giving more weight to repeated data points. Removing duplicates ensures each observation is counted only once.",
-
     dtypes:
       "Data type issues occur when columns contain values of inconsistent types. Converting to appropriate data types ensures proper analysis and visualization.",
-
     formatting:
       "Formatting issues occur when data follows inconsistent formats, such as different date formats or number notations, which can lead to errors in processing.",
-
     class_imbalance:
       "Class imbalance occurs when target classes in your dataset are not represented equally, which can bias model predictions towards the majority class.",
-
     categorical_conversion_needed:
       "Categorical data needs to be converted to numerical format for many machine learning algorithms to process them correctly.",
-
     lexical_issues:
       "Lexical issues include inconsistent text formatting, spelling variations, or character encoding problems that can affect text analysis.",
   };
-
   const key = issueType.toLowerCase().replace(/[^a-z_]/g, "");
   return (
     descriptions[key] ||
