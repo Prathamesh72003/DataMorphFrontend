@@ -1,6 +1,5 @@
-"use client";
-
 import Image from "next/image";
+import { useState, useEffect, Key } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -10,6 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { API_BASE_URL } from "@/constants";
+import { StaticImport } from "next/dist/shared/lib/get-img-props";
 
 interface IssueResolutionProps {
   issueType: string;
@@ -24,227 +25,120 @@ export function IssueResolutionComponent({
   onMethodChange,
   selectedColumnMethods,
 }: IssueResolutionProps) {
-  const getVisualization = (type: string) => {
-    const allVisualizations = JSON.parse(
-      sessionStorage.getItem("visualizations") || "[]"
-    );
-    let relevantVisualizations: string[] = [];
+  const [strategies, setStrategies] = useState<Record<string, any>>({});
 
-    if (type.toLowerCase() === "missing") {
-      relevantVisualizations = allVisualizations.filter((url: string) =>
-        url.split("/").pop()?.startsWith("missing")
-      );
-    } else if (type.toLowerCase() === "outliers") {
-      relevantVisualizations = allVisualizations.filter((url: string) => {
-        const filename = url.split("/").pop() || "";
-        return (
-          filename.startsWith("scatter") ||
-          filename.startsWith("histo") ||
-          filename.startsWith("box")
-        );
-      });
+  // Fetch recommendation strategies once
+  useEffect(() => {
+    async function loadStrategies() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/strategies`, { credentials: "include" });
+        const data = await res.json();
+        setStrategies(data);
+      } catch (err) {
+        console.error("Failed to load strategies:", err);
+      }
     }
-
-    // Return at least placeholders if empty
-    return relevantVisualizations.length > 0
-      ? relevantVisualizations
-      : [
-          "/api/placeholder/300/200",
-          "/api/placeholder/300/200",
-          "/api/placeholder/300/200",
-        ];
-  };
+    loadStrategies();
+  }, []);
 
   const formatIssueDetails = () => {
-    if (typeof issueDetails === "number") {
-      return [{ column: "Total Count", value: issueDetails }];
-    }
+    if (typeof issueDetails === "number") return [{ column: "Total Count", value: issueDetails }];
     return Object.entries(issueDetails).map(([column, value]) => {
       let formattedValue: string | number = 0;
       if (typeof value === "number") formattedValue = value;
       else if (typeof value === "string") formattedValue = value;
-      else if (typeof value === "object" && value !== null) {
-        const values = Object.values(value);
-        formattedValue =
-          values.length > 0
-            ? typeof values[0] === "number"
-              ? values[0]
-              : Object.keys(value).length
-            : 0;
+      else if (value && typeof value === "object") {
+        const vals = Object.values(value);
+        formattedValue = vals.length
+          ? typeof vals[0] === "number"
+            ? vals[0]
+            : Object.keys(value).length
+          : 0;
       }
       return { column, value: formattedValue };
     });
   };
 
-  const visualizations = getVisualization(issueType);
-  const tableData = formatIssueDetails();
-  const formattedIssueType = issueType
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-
-  const showColumnSelection = [
-    "missing",
-    "outliers",
-    "categorical_conversion_needed",
-    "dtypes",
-  ].includes(issueType.toLowerCase());
-
-  const getResolutionMethodsForType = (issueType: string) => {
-    switch (issueType.toLowerCase()) {
-      case "missing":
-        return [
-          "Mean",
-          "Median",
-          "Mode",
-          "Backward Fill",
-          "KNN Imputation",
-          "Multivariate Imputation",
-        ];
-      case "categorical_conversion_needed":
-        return [
-          "One-Hot Encoding",
-          "Ordinal Encoding",
-          "Binary Encoding",
-          "Frequency Encoding",
-          "Hash Encoding",
-        ];
-      case "dtypes":
-        return [
-          "Explicit Type Casting",
-          "Implicit Type Coercion",
-          "Pattern-based Format Enforcement",
-        ];
-      case "outliers":
-        return ["Z-Score-Based Filtering", "Winsorization"];
-      default:
-        return [];
-    }
-  };
-
-  const columnSpecificMethods = getResolutionMethodsForType(issueType);
-
-  const isVisualizationSupported = ["missing", "outliers"].includes(
-    issueType.toLowerCase()
+  const rows = formatIssueDetails().filter(r => !(typeof r.value === "number" && r.value === 0));
+  const formattedIssueType = issueType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const visuals = JSON.parse(sessionStorage.getItem("visualizations") || "[]").filter((url: string) =>
+    issueType.toLowerCase() === "missing"
+      ? url.includes("missing")
+      : issueType.toLowerCase() === "outliers"
+      ? ["scatter", "histo", "box"].some(p => url.includes(p))
+      : false
   );
-
-  const gridCols =
-    visualizations.length > 3
-      ? "grid-cols-1 md:grid-cols-4"
-      : "grid-cols-1 md:grid-cols-3";
+  const showColumnSelection = ["missing", "outliers", "categorical_conversion_needed", "dtypes"].includes(issueType.toLowerCase());
+  const strategiesKey = issueType.toLowerCase() === "categorical_conversion_needed" ? "categorical_data_conversion" : issueType.toLowerCase();
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-[#0B1A2F] mb-2">
-          About {formattedIssueType} Issues
-        </h2>
-        <p className="text-gray-600">{getIssueDescription(issueType)}</p>
-      </div>
-
-      <Tabs defaultValue="visualization" className="w-full">
-        <TabsList className="grid grid-cols-2 mb-4">
+      <h2 className="text-xl font-semibold text-[#0B1A2F] mb-4">About {formattedIssueType} Issues</h2>
+      <Tabs defaultValue="data" className="w-full">
+        <TabsList className="grid grid-cols-2 gap-2 mb-4">
           <TabsTrigger value="visualization">Visualizations</TabsTrigger>
           <TabsTrigger value="data">Data Details</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="visualization" className="animate-fade-in">
-          {isVisualizationSupported ? (
-            <div className={`grid gap-4 ${gridCols}`}>
-              {visualizations.map((src, index) => (
-                <Card
-                  key={index}
-                  className="data-card overflow-hidden group hover:shadow-md transition-all duration-200"
-                >
+        <TabsContent value="visualization">
+          {visuals.length ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {visuals.map((src: string | StaticImport, i: Key) => (
+                <Card key={i} className="overflow-hidden">
                   <CardContent className="p-0">
-                    <div className="relative">
-                      <Image
-                        width={300}
-                        height={200}
-                        src={src}
-                        alt={`${issueType} visualization ${index + 1}`}
-                        className="w-full h-auto group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end">
-                        <div className="p-3 text-white text-sm font-medium">
-                          {formattedIssueType} Chart {index + 1}
-                        </div>
-                      </div>
-                    </div>
+                    <Image width={300} height={200} src={src} alt={`${formattedIssueType} chart ${i}`} className="w-full h-auto" />
                   </CardContent>
                 </Card>
               ))}
             </div>
           ) : (
-            <p className="text-gray-500 text-sm italic">
-              No visualizations available for this issue type.
-            </p>
+            <p className="text-gray-500 italic">No visualizations available.</p>
           )}
         </TabsContent>
 
-        <TabsContent value="data" className="animate-fade-in">
-          <Card className="data-card overflow-hidden">
+        <TabsContent value="data">
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="min-w-full table-auto border border-gray-200 shadow-sm">
-                  <thead>
-                    <tr className="bg-gray-100 text-left text-sm font-semibold text-gray-700">
-                      <th className="px-4 py-2 rounded-tl-lg border-b border-gray-200">
-                        Column Name
-                      </th>
-                      <th className="px-4 py-2 border-b border-gray-200">
-                        Affected Rows / Issues
-                      </th>
-                      {showColumnSelection && (
-                        <th className="px-4 py-2 rounded-tr-lg border-b border-gray-200">
-                          Resolution Method
-                        </th>
-                      )}
+                <table className="min-w-full divide-y divide-gray-200 table-auto">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Column Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Affected Rows</th>
+                      {showColumnSelection && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>}
+                      {showColumnSelection && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recommended</th>}
                     </tr>
                   </thead>
-                  <tbody>
-                    {tableData
-                      .filter(
-                        (row) =>
-                          !(typeof row.value === "number" && row.value === 0)
-                      )
-                      .map((row, index) => (
-                        <tr
-                          key={index}
-                          className="even:bg-gray-50 hover:bg-gray-100 transition"
-                        >
-                          <td className="px-4 py-2 font-medium text-gray-800 border-b border-gray-200">
-                            {row.column}
-                          </td>
-                          <td className="px-4 py-2 border-b border-gray-200">
-                            {row.value}
-                          </td>
-                          {showColumnSelection ? (
-                            <td className="px-4 py-2 border-b border-gray-200">
-                              <Select
-                                onValueChange={(value) =>
-                                  onMethodChange(row.column, value)
-                                }
-                                value={selectedColumnMethods[row.column] || ""}
-                              >
-                                <SelectTrigger className="w-full md:w-60 bg-white">
-                                  <SelectValue placeholder="Choose method" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {columnSpecificMethods.map((method) => (
-                                    <SelectItem key={method} value={method}>
-                                      {method}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </td>
-                          ) : (
-                            <td className="px-4 py-2 border-b border-gray-200 text-sm text-gray-500">
-                              Default methods applied
-                            </td>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {rows.map((row, idx) => {
+                      const recObj = strategies[strategiesKey] || {};
+                      const rec = recObj && typeof recObj === "object" && !Array.isArray(recObj)
+                        ? recObj[row.column]
+                        : undefined;
+                      return (
+                        <tr key={idx}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.column}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.value}</td>
+                          {showColumnSelection && (
+                            <>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                <Select onValueChange={val => onMethodChange(row.column, val)} value={selectedColumnMethods[row.column] || ""}>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select method" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {getResolutionMethodsForType(issueType).map(m => (
+                                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{rec ?? "-"}</td>
+                            </>
                           )}
                         </tr>
-                      ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -255,6 +149,8 @@ export function IssueResolutionComponent({
     </div>
   );
 }
+
+
 
 // Helper function to get description based on issue type
 function getIssueDescription(issueType: string): string {
@@ -271,6 +167,8 @@ function getIssueDescription(issueType: string): string {
       "Formatting issues occur when data follows inconsistent formats, such as different date formats or number notations, which can lead to errors in processing.",
     class_imbalance:
       "Class imbalance occurs when target classes in your dataset are not represented equally, which can bias model predictions towards the majority class.",
+    categorical_issues:
+      "Categorical issues include inconsistent categories or unexpected labels that can affect grouping and model training.",
     categorical_conversion_needed:
       "Categorical data needs to be converted to numerical format for many machine learning algorithms to process them correctly.",
     lexical_issues:
@@ -281,4 +179,37 @@ function getIssueDescription(issueType: string): string {
     descriptions[key] ||
     "This issue affects the quality of your dataset and may impact analysis results."
   );
+}
+
+// Extracted resolution methods lookup
+function getResolutionMethodsForType(issueType: string) {
+  switch (issueType.toLowerCase()) {
+    case "missing":
+      return [
+        "Mean",
+        "Median",
+        "Mode",
+        "Backward Fill",
+        "KNN Imputation",
+        "Multivariate Imputation",
+      ];
+    case "categorical_conversion_needed":
+      return [
+        "One-Hot Encoding",
+        "Ordinal Encoding",
+        "Binary Encoding",
+        "Frequency Encoding",
+        "Hash Encoding",
+      ];
+    case "dtypes":
+      return [
+        "Explicit Type Casting",
+        "Implicit Type Coercion",
+        "Pattern-based Format Enforcement",
+      ];
+    case "outliers":
+      return ["Z-Score-Based Filtering", "Winsorization"];
+    default:
+      return [];
+  }
 }
