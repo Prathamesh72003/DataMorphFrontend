@@ -59,7 +59,7 @@ export default function ResultsPage() {
       if (data.error) throw new Error(data.error);
 
       setVisualization(
-        data.before_plot.map((plot: string) => `${API_BASE_URL}${plot}`)
+        data.before_plot.map((plot: string) => `${API_BASE_URL}/${plot}`)
       );
     } catch (err) {
       console.error("Visualization error:", err);
