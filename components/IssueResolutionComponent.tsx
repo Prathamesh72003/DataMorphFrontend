@@ -1,10 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { AlertTriangle } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -27,30 +24,46 @@ export function IssueResolutionComponent({
   onMethodChange,
   selectedColumnMethods,
 }: IssueResolutionProps) {
-  // Function to generate visualization placeholders based on issue type
   const getVisualization = (type: string) => {
-    // In a real implementation, these would be actual URLs from the backend
-    // For now, we use placeholder visuals
-    return [
-      "/api/placeholder/300/200",
-      "/api/placeholder/300/200",
-      "/api/placeholder/300/200",
-    ];
+    const allVisualizations = JSON.parse(
+      sessionStorage.getItem("visualizations") || "[]"
+    );
+    let relevantVisualizations: string[] = [];
+
+    if (type.toLowerCase() === "missing") {
+      relevantVisualizations = allVisualizations.filter((url: string) =>
+        url.split("/").pop()?.startsWith("missing")
+      );
+    } else if (type.toLowerCase() === "outliers") {
+      relevantVisualizations = allVisualizations.filter((url: string) => {
+        const filename = url.split("/").pop() || "";
+        return (
+          filename.startsWith("scatter") ||
+          filename.startsWith("histo") ||
+          filename.startsWith("box")
+        );
+      });
+    }
+
+    // Return at least placeholders if empty
+    return relevantVisualizations.length > 0
+      ? relevantVisualizations
+      : [
+          "/api/placeholder/300/200",
+          "/api/placeholder/300/200",
+          "/api/placeholder/300/200",
+        ];
   };
 
-  // Function to format the issue details into tabular data
   const formatIssueDetails = () => {
     if (typeof issueDetails === "number") {
       return [{ column: "Total Count", value: issueDetails }];
     }
     return Object.entries(issueDetails).map(([column, value]) => {
       let formattedValue: string | number = 0;
-
-      if (typeof value === "number") {
-        formattedValue = value;
-      } else if (typeof value === "string") {
-        formattedValue = value;
-      } else if (typeof value === "object" && value !== null) {
+      if (typeof value === "number") formattedValue = value;
+      else if (typeof value === "string") formattedValue = value;
+      else if (typeof value === "object" && value !== null) {
         const values = Object.values(value);
         formattedValue =
           values.length > 0
@@ -59,7 +72,6 @@ export function IssueResolutionComponent({
               : Object.keys(value).length
             : 0;
       }
-
       return { column, value: formattedValue };
     });
   };
@@ -111,6 +123,15 @@ export function IssueResolutionComponent({
 
   const columnSpecificMethods = getResolutionMethodsForType(issueType);
 
+  const isVisualizationSupported = ["missing", "outliers"].includes(
+    issueType.toLowerCase()
+  );
+
+  const gridCols =
+    visualizations.length > 3
+      ? "grid-cols-1 md:grid-cols-4"
+      : "grid-cols-1 md:grid-cols-3";
+
   return (
     <div>
       <div className="mb-6">
@@ -127,31 +148,37 @@ export function IssueResolutionComponent({
         </TabsList>
 
         <TabsContent value="visualization" className="animate-fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {visualizations.map((src, index) => (
-              <Card
-                key={index}
-                className="data-card overflow-hidden group hover:shadow-md transition-all duration-200"
-              >
-                <CardContent className="p-0">
-                  <div className="relative">
-                    <Image
-                      width={300}
-                      height={200}
-                      src={src || "/placeholder.svg"}
-                      alt={`${issueType} visualization ${index + 1}`}
-                      className="w-full h-auto group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end">
-                      <div className="p-3 text-white text-sm font-medium">
-                        {formattedIssueType} Chart {index + 1}
+          {isVisualizationSupported ? (
+            <div className={`grid gap-4 ${gridCols}`}>
+              {visualizations.map((src, index) => (
+                <Card
+                  key={index}
+                  className="data-card overflow-hidden group hover:shadow-md transition-all duration-200"
+                >
+                  <CardContent className="p-0">
+                    <div className="relative">
+                      <Image
+                        width={300}
+                        height={200}
+                        src={src}
+                        alt={`${issueType} visualization ${index + 1}`}
+                        className="w-full h-auto group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end">
+                        <div className="p-3 text-white text-sm font-medium">
+                          {formattedIssueType} Chart {index + 1}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm italic">
+              No visualizations available for this issue type.
+            </p>
+          )}
         </TabsContent>
 
         <TabsContent value="data" className="animate-fade-in">
@@ -189,9 +216,7 @@ export function IssueResolutionComponent({
                             {row.column}
                           </td>
                           <td className="px-4 py-2 border-b border-gray-200">
-                            <Badge variant="outline" className="text-sm">
-                              {row.value}
-                            </Badge>
+                            {row.value}
                           </td>
                           {showColumnSelection ? (
                             <td className="px-4 py-2 border-b border-gray-200">

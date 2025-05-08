@@ -44,10 +44,31 @@ export default function Home() {
     }
   }, [uploadedFile])
 
+  const visualize = async (filename: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/visualize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      // Prepend API base URL to each plot path
+      const fullUrls = data.before_plot.map((path: string) => `${API_BASE_URL}/${path}`);
+      console.log("visualization URLs:", fullUrls);
+      sessionStorage.setItem("visualizations", JSON.stringify(fullUrls));
+    } catch (err) {
+      console.error("Visualization error:", err);
+      // Optionally set an error state if visualizations are critical
+    }
+  };
+
   const handleProceed = () => {
     if (analysis && Object.keys(analysis.issues).length > 0) {
       sessionStorage.setItem("analysisData", JSON.stringify(analysis))
       sessionStorage.setItem("uploadedFile", uploadedFile || "")
+      if (uploadedFile) visualize(uploadedFile)
       router.push("/issue/1")
     }
   }

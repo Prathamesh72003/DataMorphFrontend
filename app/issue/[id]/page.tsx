@@ -223,7 +223,7 @@ export default function IssuePage({
           <Button
             onClick={() => handleNavigation("next")}
             disabled={processingData}
-            className="bg-[#0B1A2F] text-white hover:bg-[#0B1A2F]/90 flex items-center gap-2"
+            className="bg-[#0B1A2F] text-white hover:bg-[#0B1A2F]/90 flex items-center gap-2 cursor-pointer"
           >
             {isLastIssue ? (
               processingData ? (

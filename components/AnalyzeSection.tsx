@@ -22,13 +22,30 @@ export function AnalyzeSection({
   const { issues } = analysis;
 
   // Only show summary counts for each issue category
-  const issueCounts = Object.entries(issues).map(([category, details]) => {
-    const count =
-      typeof details === "number" ? details : Object.keys(details).length;
-    return { category, count };
-  });
+  const issueCounts = Object.entries(issues)
+  .map(([category, details]) => {
+    let count: number;
 
-  const hasIssues = issueCounts.length > 0;
+    if (typeof details === "number") {
+      // if the entire details is a number, just use it
+      count = details;
+    } else if (details && typeof details === "object") {
+      // details is an object: count each key if
+      //   - its value is a number > 0, or
+      //   - its value is non‑numeric (categorical, nested, etc.)
+      count = Object.entries(details).filter(([_, v]) => {
+        return typeof v === "number" ? v > 0 : true;
+      }).length;
+    } else {
+      count = 0;
+    }
+
+    return { category, count };
+  })
+  .filter(({ count }) => count > 0);   // drop any category with zero count
+
+const hasIssues = issueCounts.length > 0;
+
 
   return (
     <Card className="data-card mt-8 overflow-hidden animate-fade-in">
