@@ -189,7 +189,7 @@ export function UploadSection({
 
             <div className="mt-4">
               <Button
-                className="w-full relative overflow-hidden group  bg-[#0B1A2F]"
+                className="w-full relative overflow-hidden group  bg-[#0B1A2F] cursor-pointer text-white shadow-lg shadow-violet-500/20 flex items-center gap-2 px-6 py-6 rounded-xl transition-all duration-300 hover:scale-105"
                 onClick={handleUpload}
                 disabled={!selectedFile || uploadLoading || loading}
               >
